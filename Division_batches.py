@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-new_data = pd.read_csv('ISIC_2019_Final_GroundTruth_Binary.csv')
+new_data = pd.read_csv('ISIC_2019_Final_GroundTruth.csv')
 
 numeros_unicos = new_data['final_label'].unique()
 porcentaje_1 = 0.7
@@ -32,6 +32,6 @@ for numero in numeros_unicos:
     valid_data = pd.concat([valid_data, valid_subset], ignore_index=True)
     test_data = pd.concat([test_data, test_subset], ignore_index=True)
 
-train_data.to_csv('ISIC_2019_Train_data_GroundTruth_Binary.csv', index=False)
-valid_data.to_csv('ISIC_2019_Valid_data_GroundTruth_Binary.csv', index=False)
-test_data.to_csv('ISIC_2019_Test_data_GroundTruth_Binary.csv', index=False)
+train_data.to_csv('ISIC_2019_Train_data_GroundTruth.csv', index=False)
+valid_data.to_csv('ISIC_2019_Valid_data_GroundTruth.csv', index=False)
+test_data.to_csv('ISIC_2019_Test_data_GroundTruth.csv', index=False)

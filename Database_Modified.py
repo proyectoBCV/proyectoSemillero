@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-dic = {'MEL': 0, 'NV': 1, 'BCC': 2, 'AK': 3, 'BKL': 4, 'DF': 5, 'VASC': 6, 'SCC': 7, 'UNK': 8}
+dic = {'MEL': 0, 'NV': 1, 'BCC': 2, 'AK': 3, 'BKL': 4, 'DF': 5, 'VASC': 6, 'SCC': 7}
 
 data = pd.read_csv('ISIC_2019_Training_GroundTruth.csv')
 data['final_label'] = ''

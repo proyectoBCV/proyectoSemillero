@@ -43,7 +43,7 @@ class CustomDataset(torch.utils.data.Dataset):
         label = self.data['final_label'].iloc[index]
         if self.transform:
             image = self.transform(image)
-        return image, label, image_id
+        return image, label#, image_id
 
 
 train_dataset = CustomDataset(train_data, transform=transform)
@@ -63,7 +63,7 @@ valid_loader = DataLoader(valid_dataset, batch_size=batch_valid, shuffle=False)
 model = models.resnet18(pretrained=True)
 num_ftrs = model.fc.in_features
 # Reemplazar la capa completamente conectada para ajustarse al número de clases a 9
-model.fc = nn.Linear(num_ftrs, 9)
+model.fc = nn.Linear(num_ftrs, 8)
 model = model.to(device)
 
 # Definir la función de pérdida y el optimizador
