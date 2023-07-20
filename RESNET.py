@@ -10,6 +10,7 @@ import time
 from sklearn.metrics import precision_score, recall_score, accuracy_score, f1_score
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
 
 start_time = time.time()
@@ -17,9 +18,17 @@ start_time = time.time()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Carga de datos y preprocesamiento
-train_data = pd.read_csv('ISIC_2019_Train_data_GroundTruth_Binary.csv')
-test_data = pd.read_csv('ISIC_2019_Test_data_GroundTruth_Binary.csv')
-valid_data = pd.read_csv('ISIC_2019_Valid_data_GroundTruth_Binary.csv')
+train_data = pd.read_csv('ISIC_2019_Train_data_GroundTruth.csv')
+test_data = pd.read_csv('ISIC_2019_Test_data_GroundTruth.csv')
+valid_data = pd.read_csv('ISIC_2019_Valid_data_GroundTruth.csv')
+
+torch.manual_seed(42)
+random_transforms = [
+    transforms.RandomHorizontalFlip(),  # Volteo horizontal
+    transforms.RandomVerticalFlip(),    # Volteo vertical
+    transforms.RandomRotation(30),      # Rotación aleatoria de hasta 30 grados
+    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1)  # Ajustes aleatorios de color
+]
 
 transform = transforms.Compose([
     transforms.Resize((224, 224)),  # Redimensionar las imágenes a 224x224 (tamaño requerido por ResNet)
@@ -64,10 +73,30 @@ model = models.resnet18(pretrained=True)
 num_ftrs = model.fc.in_features
 # Reemplazar la capa completamente conectada para ajustarse al número de clases a 9
 model.fc = nn.Linear(num_ftrs, 8)
-model = model.to(device)
+pretrained_state_dict = torch.load("modelo_entrenado1.pth")
 
+model_state_dict = model.state_dict()
+
+# Filtrar los pesos preentrenados para obtener solo los de la última capa
+filtered_state_dict = {k: v for k, v in pretrained_state_dict.items() if k in model_state_dict}
+
+# Actualizar los pesos de la última capa de tu modelo personalizado
+model_state_dict.update(filtered_state_dict)
+
+# Cargar los pesos actualizados en tu modelo personalizado
+model.load_state_dict(model_state_dict)
+
+
+model = model.to(device)
+weights = torch.ones(8)  # Inicializamos todos los pesos en 1
+
+# Definir los pesos específicos para las clases 3, 5 y 7
+weights[3] = 2.0
+weights[5] = 2.0
+weights[7] = 3.0
+weights.to(device)
 # Definir la función de pérdida y el optimizador
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss(weight=weights)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 
@@ -100,6 +129,8 @@ def train(model, train_loader, criterion, optimizer):
     acc = 100 * correct_predictions/total_samples
     
     return train_predictions, train_labels, t_loss, acc
+
+torch.save(model.state_dict(), 'modelo_entrenado2.pth')
 
 #Validación y test 
 def evaluate(model, data_loader, criterion):
@@ -154,6 +185,9 @@ for epoch in range(num_epochs):
     print(f'Training F1-Score: {train_f1_score}')
     print('---------------------------')
 
+    
+    
+    
     #Validación
     valid_predictions, valid_labels, v_loss, v_acc = evaluate(model, valid_loader, criterion) #,valid_images, valid_label_true, valid_label_pred = evaluate(model, valid_loader, criterion)  
     valid_precision = precision_score(valid_labels, valid_predictions, average=None)
@@ -179,6 +213,7 @@ for epoch in range(num_epochs):
     print(f'Test Recall: {test_recall}')
     print(f'Test F1-Score: {test_f1_score}')
     print('----------------------------')
+
 
 """
 # Directorio para guardar las imágenes
