@@ -52,7 +52,7 @@ class CustomDataset(torch.utils.data.Dataset):
         label = self.data['final_label'].iloc[index]
         if self.transform:
             image = self.transform(image)
-        return image, label#, image_id
+        return image, label, image_id
 
 
 train_dataset = CustomDataset(train_data, transform=transform)
@@ -71,32 +71,31 @@ valid_loader = DataLoader(valid_dataset, batch_size=batch_valid, shuffle=False, 
 # Cargar el modelo pre-entrenado ResNet
 model = models.resnet18(pretrained=True)
 num_ftrs = model.fc.in_features
-# Reemplazar la capa completamente conectada para ajustarse al número de clases a 9
+# Reemplazar la capa completamente conectada para ajustarse al número de clases a 8
 model.fc = nn.Linear(num_ftrs, 8)
+
+#Carga de pesos preentrenados en un experimento anterior
 pretrained_state_dict = torch.load("modelo_entrenado2.pth", map_location=device)
 
+# Sacar los pesos de la última capa 
 model_state_dict = model.state_dict()
-
-# Filtrar los pesos preentrenados para obtener solo los de la última capa
-# Filtrar los pesos preentrenados para obtener solo los de la última capa
 filtered_state_dict = {k: v.to(device) for k, v in pretrained_state_dict.items() if k in model_state_dict}
-
-# Actualizar los pesos de la última capa de tu modelo personalizado
 model_state_dict.update(filtered_state_dict)
-
-# Cargar los pesos actualizados en tu modelo personalizado
 model.load_state_dict(model_state_dict)
 
-
+#Mover el modelo a la GPU
 model = model.to(device)
-weights = torch.ones(8).to(device)  # Inicializamos todos los pesos en 1
 
-# Definir los pesos específicos para las clases 3, 5 y 7
+# Asignación de pesos en la función de pérdida 
+# Inicializamos todos los pesos en 1
+weights = torch.ones(8).to(device)  # Inicializamos todos los pesos en 1
+# Definir los pesos específicos para las clases 3, 4, 5 y 7
 weights[3] = 5.0
 weights[4] = 5.0
 weights[5] = 5.0
 weights[7] = 5.0
 weights.to(device)
+
 # Definir la función de pérdida y el optimizador
 criterion = nn.CrossEntropyLoss(weight=weights)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -132,6 +131,7 @@ def train(model, train_loader, criterion, optimizer):
     
     return train_predictions, train_labels, t_loss, acc
 
+#Guardar los pesos del entrenamiento
 torch.save(model.state_dict(), 'modelo_entrenado3.pth')
 
 #Validación y test 
@@ -142,10 +142,14 @@ def evaluate(model, data_loader, criterion):
     total_samples = 0
     predictions = []
     labels = []
-    sample_images = []
-    sample_labels_true = []
-    sample_labels_pred = []
-
+    
+    #Lista de imágenes mal clasificadas 
+    missclassified_images = []
+    #Lista de labels verdaderas de las imagenes mal clasificadas 
+    true_labels_missclassified = []
+    #Lista de labels mal predichas 
+    predicted_labels_missclassified = []
+    
     with torch.no_grad():
         for images, labels_batch in data_loader:
             images, labels_batch = images.to(device), labels_batch.to(device)
@@ -157,20 +161,22 @@ def evaluate(model, data_loader, criterion):
             total_samples += labels_batch.size(0)
             predictions.extend(predicted.cpu().numpy())
             labels.extend(labels_batch.cpu().numpy())
-            """
-            if len(sample_images) < 16:  # Guardar las primeras 16 imágenes
-                sample_images.extend(images.cpu())
-                sample_labels_true.extend(labels_batch.cpu().numpy())
-                sample_labels_pred.extend(predicted.cpu().numpy())
-
-    
-    sample_images = torch.stack(sample_images)
-    sample_labels_true = np.array(sample_labels_true)
-    sample_labels_pred = np.array(sample_labels_pred)"""
+            
+            missclassified_indices = torch.where(predicted != labels_batch)[0]
+            misclassified_images.extend(images[misclassified_indices].cpu())
+            true_labels_missclassified.extend(images[missclassified_indices].cpu())
+            predicted_labels_missclassified.extend(images[misclassified_indices].cpu())
+            
     avg_loss = loss / len(data_loader)
     accuracy = 100 * correct_predictions / total_samples
-    return predictions, labels, avg_loss, accuracy #, sample_images, sample_labels_pred, sample_labels_true
+    return predictions, labels, avg_loss, accuracy, missclassified_images, true_labels_missclassified, predicted_labels_missclassified
 
+
+val_save_dir = './misclassified_valid_images'
+os.makedirs(val_save_dir, exist_ok=True)
+
+test_save_dir = './misclassified_test_images'
+os.makedirs(test_save_dir, exist_ok=True)
 
 num_epochs = 20
 for epoch in range(num_epochs):
@@ -188,10 +194,8 @@ for epoch in range(num_epochs):
     print('---------------------------')
 
     
-    
-    
     #Validación
-    valid_predictions, valid_labels, v_loss, v_acc = evaluate(model, valid_loader, criterion) #,valid_images, valid_label_true, valid_label_pred = evaluate(model, valid_loader, criterion)  
+    valid_predictions, valid_labels, v_loss, v_acc, val_missclassified_images, val_true_labels_missclassified, val_predicted_labels_missclassified = evaluate(model, valid_loader, criterion) #,valid_images, valid_label_true, valid_label_pred = evaluate(model, valid_loader, criterion)  
     valid_precision = precision_score(valid_labels, valid_predictions, average=None)
     valid_recall = recall_score(valid_labels, valid_predictions, average=None)
     valid_f1_score = f1_score(valid_labels, valid_predictions, average=None)
@@ -203,8 +207,9 @@ for epoch in range(num_epochs):
     print(f'Validation F1-Score: {valid_f1_score}')
     print('-------------------------------')
     
+    
     # Evaluación en el conjunto de prueba
-    test_predictions, test_labels, t_loss, t_acc = evaluate(model, test_loader, criterion) #, test_images, test_label_true, test_label_pred = evaluate(model, test_loader, criterion)
+    test_predictions, test_labels, t_loss, t_acc, train_missclassified_images, train_true_labels_missclassified, train_predicted_labels_missclassified = evaluate(model, test_loader, criterion) #, test_images, test_label_true, test_label_pred = evaluate(model, test_loader, criterion)
     test_precision = precision_score(test_labels, test_predictions, average=None)
     test_recall = recall_score(test_labels, test_predictions, average=None)
     test_f1_score = f1_score(test_labels, test_predictions, average=None)
@@ -216,30 +221,21 @@ for epoch in range(num_epochs):
     print(f'Test F1-Score: {test_f1_score}')
     print('----------------------------')
 
-
-"""
-# Directorio para guardar las imágenes
-save_dir = '/media/disk2/apenaranda/Semillero/proyecto'  # Reemplaza con el directorio donde deseas guardar las imágenes
-os.makedirs(save_dir, exist_ok=True)
-
-# Recorrer las imágenes de muestra y guardarlas en el directorio
-for i in range(len(test_images)):
-    image = test_images[i].permute(1, 2, 0)
-    label_true = test_label_true[i]
-    label_pred = test_label_pred[i]
-
-    # Convertir la imagen a un objeto de la clase Image de PIL
-    image_pil = Image.fromarray((image * 255).numpy().astype(np.uint8))
-
-    # Ruta de archivo para guardar la imagen
-    file_path = os.path.join(save_dir, f'image_{i}.jpg')
-
-    # Guardar la imagen con etiquetas verdaderas y predichas
-    image_pil.save(file_path)
-
-    print(f'True: {label_true}\nPredicted: {label_pred}')
-"""
+    for i, image in enumerate(val_missclassified_images):
+        true_label = val_true_labels_missclassified[i].item()
+        predicted_label = val_predicted_labels_missclassified[i].item()
+        image_pil = transforms.ToPILImage()(image)
+        file_path = os.path.join(val_save_dir, f'valid_missclassified_image_{i}_true_{true_label}_predicted_{predicted_label}.jpg')
+        image_pil.save(file_path)
     
+    for i, image in enumerate(train_missclassified_images):
+        true_label = train_true_labels_missclassified[i].item()
+        predicted_label = train_predicted_labels_missclassified[i].item()
+        image_pil = transforms.ToPILImage()(image)
+        file_path = os.path.join(test_save_dir, f'train_missclassified_image_{i}_true_{true_label}_predicted_{predicted_label}.jpg')
+        image_pil.save(file_path)
+
+
 end_time = time.time()
 # Cálculo del tiempo transcurrido
 elapsed_time = (end_time - start_time)/60
