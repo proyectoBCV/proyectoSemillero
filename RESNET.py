@@ -64,21 +64,22 @@ batch_train = 443
 batch_test = 95
 batch_valid = 95
 
-train_loader = DataLoader(train_dataset, batch_size=batch_train, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=batch_test, shuffle=False)
-valid_loader = DataLoader(valid_dataset, batch_size=batch_valid, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=batch_train, shuffle=True, num_workers=4, pin_memory=True)
+test_loader = DataLoader(test_dataset, batch_size=batch_test, shuffle=False, num_workers=4, pin_memory=True)
+valid_loader = DataLoader(valid_dataset, batch_size=batch_valid, shuffle=False, num_workers=4, pin_memory=True)
 
 # Cargar el modelo pre-entrenado ResNet
 model = models.resnet18(pretrained=True)
 num_ftrs = model.fc.in_features
 # Reemplazar la capa completamente conectada para ajustarse al número de clases a 9
 model.fc = nn.Linear(num_ftrs, 8)
-pretrained_state_dict = torch.load("modelo_entrenado1.pth")
+pretrained_state_dict = torch.load("modelo_entrenado2.pth", map_location=device)
 
 model_state_dict = model.state_dict()
 
 # Filtrar los pesos preentrenados para obtener solo los de la última capa
-filtered_state_dict = {k: v for k, v in pretrained_state_dict.items() if k in model_state_dict}
+# Filtrar los pesos preentrenados para obtener solo los de la última capa
+filtered_state_dict = {k: v.to(device) for k, v in pretrained_state_dict.items() if k in model_state_dict}
 
 # Actualizar los pesos de la última capa de tu modelo personalizado
 model_state_dict.update(filtered_state_dict)
@@ -88,12 +89,13 @@ model.load_state_dict(model_state_dict)
 
 
 model = model.to(device)
-weights = torch.ones(8)  # Inicializamos todos los pesos en 1
+weights = torch.ones(8).to(device)  # Inicializamos todos los pesos en 1
 
 # Definir los pesos específicos para las clases 3, 5 y 7
-weights[3] = 2.0
-weights[5] = 2.0
-weights[7] = 3.0
+weights[3] = 5.0
+weights[4] = 5.0
+weights[5] = 5.0
+weights[7] = 5.0
 weights.to(device)
 # Definir la función de pérdida y el optimizador
 criterion = nn.CrossEntropyLoss(weight=weights)
@@ -130,7 +132,7 @@ def train(model, train_loader, criterion, optimizer):
     
     return train_predictions, train_labels, t_loss, acc
 
-torch.save(model.state_dict(), 'modelo_entrenado2.pth')
+torch.save(model.state_dict(), 'modelo_entrenado3.pth')
 
 #Validación y test 
 def evaluate(model, data_loader, criterion):
@@ -170,7 +172,7 @@ def evaluate(model, data_loader, criterion):
     return predictions, labels, avg_loss, accuracy #, sample_images, sample_labels_pred, sample_labels_true
 
 
-num_epochs = 10
+num_epochs = 20
 for epoch in range(num_epochs):
     #impresión train
     train_predictions, train_labels, t_loss, acc = train(model, train_loader, criterion, optimizer)
@@ -178,7 +180,7 @@ for epoch in range(num_epochs):
     train_recall = recall_score(train_labels, train_predictions, average=None)
     train_f1_score = f1_score(train_labels, train_predictions, average=None)
 
-    print(f'Época: {epoch:.4f}')
+    print(f'Época: {epoch+1:.4f}')
     print(f'Training Loss: {t_loss:.4f} | Training Accuracy: {acc:.2f}%')
     print(f'Training Precision: {train_precision}')
     print(f'Training Recall: {train_recall}')
