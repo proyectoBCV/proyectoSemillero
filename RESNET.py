@@ -11,7 +11,8 @@ from sklearn.metrics import precision_score, recall_score, accuracy_score, f1_sc
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
-
+import os
+import hashlib
 
 start_time = time.time()
 # Especificar el dispositivo a utilizar (GPU o CPU)
@@ -52,7 +53,7 @@ class CustomDataset(torch.utils.data.Dataset):
         label = self.data['final_label'].iloc[index]
         if self.transform:
             image = self.transform(image)
-        return image, label, image_id
+        return image, label#, image_id
 
 
 train_dataset = CustomDataset(train_data, transform=transform)
@@ -132,7 +133,7 @@ def train(model, train_loader, criterion, optimizer):
     return train_predictions, train_labels, t_loss, acc
 
 #Guardar los pesos del entrenamiento
-torch.save(model.state_dict(), 'modelo_entrenado3.pth')
+#torch.save(model.state_dict(), 'modelo_entrenado3.pth')
 
 #Validación y test 
 def evaluate(model, data_loader, criterion):
@@ -161,11 +162,11 @@ def evaluate(model, data_loader, criterion):
             total_samples += labels_batch.size(0)
             predictions.extend(predicted.cpu().numpy())
             labels.extend(labels_batch.cpu().numpy())
-            
+            #breakpoint()
             missclassified_indices = torch.where(predicted != labels_batch)[0]
-            misclassified_images.extend(images[misclassified_indices].cpu())
+            missclassified_images.extend(images[missclassified_indices].cpu())
             true_labels_missclassified.extend(images[missclassified_indices].cpu())
-            predicted_labels_missclassified.extend(images[misclassified_indices].cpu())
+            predicted_labels_missclassified.extend(images[missclassified_indices].cpu())
             
     avg_loss = loss / len(data_loader)
     accuracy = 100 * correct_predictions / total_samples
@@ -185,13 +186,13 @@ for epoch in range(num_epochs):
     train_precision = precision_score(train_labels, train_predictions, average=None)
     train_recall = recall_score(train_labels, train_predictions, average=None)
     train_f1_score = f1_score(train_labels, train_predictions, average=None)
-
+    """
     print(f'Época: {epoch+1:.4f}')
     print(f'Training Loss: {t_loss:.4f} | Training Accuracy: {acc:.2f}%')
     print(f'Training Precision: {train_precision}')
     print(f'Training Recall: {train_recall}')
     print(f'Training F1-Score: {train_f1_score}')
-    print('---------------------------')
+    print('---------------------------')"""
 
     
     #Validación
@@ -199,13 +200,13 @@ for epoch in range(num_epochs):
     valid_precision = precision_score(valid_labels, valid_predictions, average=None)
     valid_recall = recall_score(valid_labels, valid_predictions, average=None)
     valid_f1_score = f1_score(valid_labels, valid_predictions, average=None)
-
+    """
     print('---------- Validación ----------')
     print(f'Validation Loss: {v_loss:.4f} | Validation Accuracy: {v_acc:.2f}%')
     print(f'Validation Precision: {valid_precision}')
     print(f'Validation Recall: {valid_recall}')
     print(f'Validation F1-Score: {valid_f1_score}')
-    print('-------------------------------')
+    print('-------------------------------')"""
     
     
     # Evaluación en el conjunto de prueba
@@ -213,24 +214,30 @@ for epoch in range(num_epochs):
     test_precision = precision_score(test_labels, test_predictions, average=None)
     test_recall = recall_score(test_labels, test_predictions, average=None)
     test_f1_score = f1_score(test_labels, test_predictions, average=None)
-
+    """
     print('---------- Prueba ----------')
     print(f'Test Loss: {t_loss:.4f} | Test Accuracy: {t_acc:.2f}%')
     print(f'Test Precision: {test_precision}')
     print(f'Test Recall: {test_recall}')
     print(f'Test F1-Score: {test_f1_score}')
-    print('----------------------------')
+    print('----------------------------')"""
 
-    for i, image in enumerate(val_missclassified_images):
-        true_label = val_true_labels_missclassified[i].item()
-        predicted_label = val_predicted_labels_missclassified[i].item()
+    for image in val_missclassified_images:
+        breakpoint()
+        true_label = val_true_labels_missclassified[i].cpu().numpy()#.item()
+        predicted_label = val_predicted_labels_missclassified[i].cpu().numpy()#.item()
         image_pil = transforms.ToPILImage()(image)
-        file_path = os.path.join(val_save_dir, f'valid_missclassified_image_{i}_true_{true_label}_predicted_{predicted_label}.jpg')
+        #breakpoint()
+        # Generar un identificador único utilizando el hash MD5 del contenido de la imagen
+        image_hash = hashlib.md5(image.numpy().tobytes()).hexdigest()
+
+        file_path = os.path.join(val_save_dir, f'valid_missclassified_image_{image_hash}_true_{true_label}_predicted_{predicted_label}.jpg')
         image_pil.save(file_path)
+        
     
     for i, image in enumerate(train_missclassified_images):
-        true_label = train_true_labels_missclassified[i].item()
-        predicted_label = train_predicted_labels_missclassified[i].item()
+        true_label = train_true_labels_missclassified[i].cpu().numpy()#.item()
+        predicted_label = train_predicted_labels_missclassified[i].cpu().numpy()#.item()
         image_pil = transforms.ToPILImage()(image)
         file_path = os.path.join(test_save_dir, f'train_missclassified_image_{i}_true_{true_label}_predicted_{predicted_label}.jpg')
         image_pil.save(file_path)
