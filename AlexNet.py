@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 from torchvision.models import alexnet
+from torch.optim.lr_scheduler import StepLR
 
 
 
@@ -33,7 +34,7 @@ random_transforms = [
 ]
 
 transform = transforms.Compose([
-    transforms.Resize((227, 227)),  # AlexNet requires input size of 227x227
+    transforms.Resize((227, 227)), 
     transforms.ToTensor(),
     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))  # Normalize using ImageNet statistics
 ])
@@ -72,16 +73,16 @@ train_loader = DataLoader(train_dataset, batch_size=batch_train, shuffle=True, n
 test_loader = DataLoader(test_dataset, batch_size=batch_test, shuffle=False, num_workers=4, pin_memory=True)
 valid_loader = DataLoader(valid_dataset, batch_size=batch_valid, shuffle=False, num_workers=4, pin_memory=True)
 
-# Cargar el modelo pre-entrenado ResNet
+# Cargar el modelo pre-entrenado AlexNet
 model = alexnet(pretrained=True)
 num_ftrs = model.classifier[6].in_features
-model.classifier[6] = nn.Linear(num_ftrs, 8)  # Change 8 to the number of classes in your dataset
+model.classifier[6] = nn.Linear(num_ftrs, 8)  
 
 model_state_dict = model.state_dict()
 
 
 model = model.to(device)
-weights = torch.ones(8).to(device)  # Inicializamos todos los pesos en 1
+weights = torch.ones(8).to(device) 
 
 # Definir los pesos específicos para las clases 3, 5 y 7
 weights[3] = 5.0
@@ -91,7 +92,8 @@ weights[7] = 5.0
 weights.to(device)
 # Definir la función de pérdida y el optimizador
 criterion = nn.CrossEntropyLoss(weight=weights)
-optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)  # You can use SGD instead of Adam
+optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+scheduler = StepLR(optimizer, step_size=3, gamma=0.1)
 
 
 
@@ -122,7 +124,8 @@ def train(model, train_loader, criterion, optimizer):
 
     t_loss = train_loss/len(train_loader)
     acc = 100 * correct_predictions/total_samples
-    
+    scheduler.step()
+    #print(f"Epoch {epoch+1}/{num_epochs}, Learning Rate: {scheduler.get_last_lr()[0]}")
     return train_predictions, train_labels, t_loss, acc
 
 torch.save(model.state_dict(), 'modelo_entrenado4.pth')
@@ -198,6 +201,13 @@ for epoch in range(num_epochs):
     print(f'Test Recall: {test_recall}')
     print(f'Test F1-Score: {test_f1_score}')
     print('----------------------------')
+
+
+end_time = time.time()
+# Cálculo del tiempo transcurrido
+elapsed_time = (end_time - start_time)/60
+print(f"Tiempo transcurrido: {elapsed_time} minutos")
+
 
 
 end_time = time.time()
