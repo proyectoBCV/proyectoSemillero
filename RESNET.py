@@ -169,16 +169,21 @@ def evaluate(model, data_loader, criterion):
     return predictions, labels, avg_loss, accuracy, missclassified_images, incorrect_labels, correct_labels
 
 
-def guardar_data(missclassified_images, incorrect_labels, correct_labels):
-    data_list = []
-    for i in range(len(missclassified_images)):
-        image = missclassified_images[i]
-        incorrect_label = incorrect_labels[i]
-        correct_label = correct_labels[i]
+output_directory = "./saved_images"
+def guardar_data(missclassified_images, incorrect_labels, correct_labels, output_dir):
+    for i in range(len(val_missclassified_images)):
+        image = val_missclassified_images[i]
+        incorrect_label = val_incorrect_labels[i]
+        correct_label = val_correct_labels[i]
+        image = (image * 255).astype(np.uint8)
+        image = np.transpose(image, (1, 2, 0))
+        image_pil = Image.fromarray(image)
+        image_name = f"image_{i}_incorrect_{incorrect_label}_correct_{correct_label}.png"
+        image_path = os.path.join(output_dir, image_name)
+        image_pil = Image.fromarray((image * 255).astype(np.uint8))  # Convertir de valores normalizados a enteros de 0 a 255
+        image_pil.save(image_path)
     
-        data_list.append([image, incorrect_label, correct_label])
-    return data_list
-    
+
 num_epochs = 1
 for epoch in range(num_epochs):
     #impresión train
@@ -200,6 +205,8 @@ for epoch in range(num_epochs):
     valid_precision = precision_score(valid_labels, valid_predictions, average=None)
     valid_recall = recall_score(valid_labels, valid_predictions, average=None)
     valid_f1_score = f1_score(valid_labels, valid_predictions, average=None)
+    
+    guardar_data(val_missclassified_images, val_incorrect_labels, val_correct_labels, output_directory)
     print('---------- Validación ----------')
     print(f'Validation Loss: {v_loss:.4f} | Validation Accuracy: {v_acc:.2f}%')
     print(f'Validation Precision: {valid_precision}')
@@ -214,6 +221,8 @@ for epoch in range(num_epochs):
     test_recall = recall_score(test_labels, test_predictions, average=None)
     test_f1_score = f1_score(test_labels, test_predictions, average=None)
     
+    guardar_data(train_missclassified_images, train_incorrect_labels, train_correct_labels, output_directory)
+    
     print('---------- Prueba ----------')
     print(f'Test Loss: {t_loss:.4f} | Test Accuracy: {t_acc:.2f}%')
     print(f'Test Precision: {test_precision}')
@@ -221,22 +230,6 @@ for epoch in range(num_epochs):
     print(f'Test F1-Score: {test_f1_score}')
     print('----------------------------')
     
-    
-    data_list_val = guardar_data(val_missclassified_images, val_incorrect_labels, val_correct_labels)
-    data_list_train = guardar_data(train_missclassified_images, train_incorrect_labels, train_correct_labels)
-
-# Convertir la lista a un DataFrame de pandas
-df = pd.DataFrame(data_list_val, columns=['image', 'incorrect_label', 'correct_label'])
-dg = pd.DataFrame(data_list_train, columns=['image', 'incorrect_label', 'correct_label'])
-    
-# Guardar el DataFrame en un archivo CSV
-csv_file_valid = './valid_misclassified_images.csv'
-csv_file_train = './train_misclassified_images.csv'
-
-df.to_csv(csv_file_valid, index=False)
-dg.to_csv(csv_file_train, index=False)
-
-
 end_time = time.time()
 # Cálculo del tiempo transcurrido
 elapsed_time = (end_time - start_time)/60
