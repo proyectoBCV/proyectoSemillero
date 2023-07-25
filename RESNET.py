@@ -13,6 +13,8 @@ import numpy as np
 from tqdm import tqdm
 import os
 import hashlib
+from torch.optim.lr_scheduler import StepLR
+
 
 start_time = time.time()
 # Especificar el dispositivo a utilizar (GPU o CPU)
@@ -28,7 +30,7 @@ random_transforms = [
     transforms.RandomHorizontalFlip(),  # Volteo horizontal
     transforms.RandomVerticalFlip(),    # Volteo vertical
     transforms.RandomRotation(30),      # Rotación aleatoria de hasta 30 grados
-    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1)  # Ajustes aleatorios de color
+    #transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1)  # Ajustes aleatorios de color
 ]
 
 transform = transforms.Compose([
@@ -48,7 +50,7 @@ class CustomDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         image_id = self.data['image'].iloc[index]
-        image_path = f"/home/nmercado/data_proyecto/data_proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
+        image_path = f"/media/user_home0/sgoyesp/Proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
         image = Image.open(image_path)
         label = self.data['final_label'].iloc[index]
         if self.transform:
@@ -61,11 +63,15 @@ test_dataset = CustomDataset(test_data, transform=transform)
 valid_dataset = CustomDataset(valid_data, transform=transform)
 
 # ... Código para crear los data loaders ... AJUSTAR BATCH
-batch_train = 443
-batch_test = 95
-batch_valid = 95
+batch_full_train = 1772
+batch_accumulation_train = 180
+steps_per_epoch_train = batch_full_train // batch_accumulation_train
 
-train_loader = DataLoader(train_dataset, batch_size=batch_train, shuffle=True, num_workers=4, pin_memory=True)
+batch_test = 380
+batch_valid = 379
+
+
+train_loader = DataLoader(train_dataset, batch_size=batch_accumulation_train, shuffle=True, num_workers=4, pin_memory=True)
 test_loader = DataLoader(test_dataset, batch_size=batch_test, shuffle=False, num_workers=4, pin_memory=True)
 valid_loader = DataLoader(valid_dataset, batch_size=batch_valid, shuffle=False, num_workers=4, pin_memory=True)
 
@@ -100,16 +106,18 @@ weights.to(device)
 # Definir la función de pérdida y el optimizador
 criterion = nn.CrossEntropyLoss(weight=weights)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
+scheduler = StepLR(optimizer, step_size=3, gamma=0.1)
 
 
 #Entrenamiento 
-def train(model, train_loader, criterion, optimizer):
+def train(model, train_loader, criterion, optimizer, steps_per_epoch):
     model.train()
     train_loss = 0.0
     correct_predictions = 0
     total_samples = 0
     train_predictions = []
     train_labels = []
+    total_steps = 0
 
     for images, labels in train_loader:
         images, labels = images.to(device), labels.to(device)
@@ -117,7 +125,12 @@ def train(model, train_loader, criterion, optimizer):
         outputs = model(images)
         loss = criterion(outputs, labels)
         loss.backward()
-        optimizer.step()
+        
+        if (total_steps + 1) % steps_per_epoch == 0:
+            optimizer.step()
+            optimizer.zero_grad()
+        
+        total_steps += 1
 
         train_loss += loss.item() * images.size(0)
         _, predicted = torch.max(outputs, 1)
@@ -129,8 +142,10 @@ def train(model, train_loader, criterion, optimizer):
 
     t_loss = train_loss/len(train_loader)
     acc = 100 * correct_predictions/total_samples
-    
+    scheduler.step()
     return train_predictions, train_labels, t_loss, acc
+    
+
 
 #Guardar los pesos del entrenamiento
 #torch.save(model.state_dict(), 'modelo_entrenado3.pth')
@@ -166,32 +181,40 @@ def evaluate(model, data_loader, criterion):
             
     avg_loss = loss / len(data_loader)
     accuracy = 100 * correct_predictions / total_samples
+
     return predictions, labels, avg_loss, accuracy, missclassified_images, incorrect_labels, correct_labels
 
 
-output_directory = "./saved_images"
-def guardar_data(missclassified_images, incorrect_labels, correct_labels, output_dir):
-    for i in range(len(val_missclassified_images)):
-        image = val_missclassified_images[i]
-        incorrect_label = val_incorrect_labels[i]
-        correct_label = val_correct_labels[i]
-        image = (image * 255).astype(np.uint8)
-        image = np.transpose(image, (1, 2, 0))
-        image_pil = Image.fromarray(image)
-        image_name = f"image_{i}_incorrect_{incorrect_label}_correct_{correct_label}.png"
-        image_path = os.path.join(output_dir, image_name)
-        image_pil = Image.fromarray((image * 255).astype(np.uint8))  # Convertir de valores normalizados a enteros de 0 a 255
-        image_pil.save(image_path)
+# output_directory = "./saved_images"
+# def guardar_data(missclassified_images, incorrect_labels, correct_labels, output_dir):
+#     if not os.path.exists(output_dir):
+#         os.makedirs(output_dir)
+#     for i in range(len(val_missclassified_images)):
+#         image = val_missclassified_images[i]
+#         incorrect_label = val_incorrect_labels[i]
+#         correct_label = val_correct_labels[i]
+#         image = (image * 255).astype(np.uint8)
+#         image = np.transpose(image, (1, 2, 0))
+#         image_pil = Image.fromarray(image)
+#         image_name = f"image_without_color_transformation_{i}_incorrect_{incorrect_label}_correct_{correct_label}.png"
+#         image_path = os.path.join(output_dir, image_name)
+#         image_pil = Image.fromarray((image * 255).astype(np.uint8))  # Convertir de valores normalizados a enteros de 0 a 255
+#         image_pil.save(image_path)
     
-
-num_epochs = 1
+train_loss=[]
+val_loss=[]
+test_loss=[]
+num_epochs = 10
+best_val_loss = float('inf')
+best_model_state_dict = None
 for epoch in range(num_epochs):
     #impresión train
-    train_predictions, train_labels, t_loss, acc = train(model, train_loader, criterion, optimizer)
+    train_predictions, train_labels, t_loss, acc = train(model, train_loader, criterion, optimizer,steps_per_epoch_train)
     train_precision = precision_score(train_labels, train_predictions, average=None)
     train_recall = recall_score(train_labels, train_predictions, average=None)
     train_f1_score = f1_score(train_labels, train_predictions, average=None)
-    
+    train_loss.append(t_loss)
+
     print(f'Época: {epoch+1:.4f}')
     print(f'Training Loss: {t_loss:.4f} | Training Accuracy: {acc:.2f}%')
     print(f'Training Precision: {train_precision}')
@@ -205,13 +228,20 @@ for epoch in range(num_epochs):
     valid_precision = precision_score(valid_labels, valid_predictions, average=None)
     valid_recall = recall_score(valid_labels, valid_predictions, average=None)
     valid_f1_score = f1_score(valid_labels, valid_predictions, average=None)
-    
-    guardar_data(val_missclassified_images, val_incorrect_labels, val_correct_labels, output_directory)
+    valid_accuracy= accuracy_score(valid_labels, valid_predictions, normalize=False)
+    val_loss.append(v_loss)
+
+    if v_loss < best_val_loss:
+        best_val_loss = v_loss
+        # Guardar los pesos del modelo en este punto (última capa)
+        best_model_state_dict = model.state_dict()
+    #guardar_data(val_missclassified_images, val_incorrect_labels, val_correct_labels, output_directory)
     print('---------- Validación ----------')
     print(f'Validation Loss: {v_loss:.4f} | Validation Accuracy: {v_acc:.2f}%')
     print(f'Validation Precision: {valid_precision}')
     print(f'Validation Recall: {valid_recall}')
     print(f'Validation F1-Score: {valid_f1_score}')
+    print(f'Validation accuracy: {valid_accuracy}')
     print('-------------------------------')
     
     
@@ -220,16 +250,49 @@ for epoch in range(num_epochs):
     test_precision = precision_score(test_labels, test_predictions, average=None)
     test_recall = recall_score(test_labels, test_predictions, average=None)
     test_f1_score = f1_score(test_labels, test_predictions, average=None)
-    
-    guardar_data(train_missclassified_images, train_incorrect_labels, train_correct_labels, output_directory)
+    test_accuracy= accuracy_score(test_labels, test_predictions, normalize=False)
+    test_loss.append(t_loss)
+
+    #guardar_data(train_missclassified_images, train_incorrect_labels, train_correct_labels, output_directory)
     
     print('---------- Prueba ----------')
     print(f'Test Loss: {t_loss:.4f} | Test Accuracy: {t_acc:.2f}%')
     print(f'Test Precision: {test_precision}')
     print(f'Test Recall: {test_recall}')
     print(f'Test F1-Score: {test_f1_score}')
+    print(f'Test accuracy: {test_accuracy}')
+    print(f"Learning Rate: {scheduler.get_last_lr()[0]}")
     print('----------------------------')
     
+torch.save(best_model_state_dict, 'mejor_modelo.pth')
+
+plt.figure()
+plt.plot(range(1, num_epochs + 1), train_loss, label='Training Loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.title('Training Loss')
+plt.legend()
+plt.savefig("train_loss.png")
+plt.close()
+
+plt.figure()
+plt.plot(range(1, num_epochs + 1), val_loss, label='Validation Loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.title('Validation Loss')
+plt.legend()
+plt.savefig("val_loss.png")
+plt.close()
+
+plt.figure()
+plt.plot(range(1, num_epochs + 1), test_loss, label='Test Loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.title('Test Loss')
+plt.legend()
+plt.savefig("test_loss.png")
+plt.close()
+
 end_time = time.time()
 # Cálculo del tiempo transcurrido
 elapsed_time = (end_time - start_time)/60
