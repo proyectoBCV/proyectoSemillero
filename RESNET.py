@@ -55,7 +55,7 @@ class CustomDataset(torch.utils.data.Dataset):
         label = self.data['final_label'].iloc[index]
         if self.transform:
             image = self.transform(image)
-        return image, label#, image_id
+        return image, label, image_id
 
 
 train_dataset = CustomDataset(train_data, transform=transform)
@@ -79,13 +79,15 @@ num_ftrs = model.fc.in_features
 model.fc = nn.Linear(num_ftrs, 8)
 
 #Carga de pesos preentrenados en un experimento anterior
-pretrained_state_dict = torch.load("modelo_entrenado2.pth", map_location=device)
+#pretrained_state_dict = torch.load("modelo_entrenado2.pth", map_location=device)
 
 # Sacar los pesos de la última capa 
+"""
 model_state_dict = model.state_dict()
 filtered_state_dict = {k: v.to(device) for k, v in pretrained_state_dict.items() if k in model_state_dict}
 model_state_dict.update(filtered_state_dict)
 model.load_state_dict(model_state_dict)
+"""
 
 #Mover el modelo a la GPU
 model = model.to(device)
@@ -107,7 +109,7 @@ scheduler = StepLR(optimizer, step_size=3, gamma=0.1)
 
 
 #Entrenamiento 
-def train(model, train_loader, criterion, optimizer, steps_per_epoch):
+def train(model, train_loader, criterion, optimizer):
     model.train()
     train_loss = 0.0
     correct_predictions = 0
@@ -116,31 +118,30 @@ def train(model, train_loader, criterion, optimizer, steps_per_epoch):
     train_labels = []
     total_steps = 0
 
-    for images, labels in train_loader:
+    for images, labels, image_id in train_loader:
         images, labels = images.to(device), labels.to(device)
         optimizer.zero_grad()
         outputs = model(images)
         loss = criterion(outputs, labels)
         loss.backward()
-        
-        if (total_steps + 1) % steps_per_epoch == 0:
-            optimizer.step()
-            optimizer.zero_grad()
-        
-        total_steps += 1
-
+        optimizer.step()
         train_loss += loss.item() * images.size(0)
         _, predicted = torch.max(outputs, 1)
         correct_predictions += (predicted == labels).sum().item()
         total_samples += labels.size(0)
-
         train_predictions.extend(predicted.cpu().numpy())
         train_labels.extend(labels.cpu().numpy())
 
+        
+        missclassified_indices = torch.where(predicted != labels)[0]
+        missclassified_images = images[missclassified_indices].cpu().numpy()
+        incorrect_labels = predicted[missclassified_indices].cpu().numpy()
+        correct_labels = labels_batch[missclassified_indices].cpu().numpy()
+        
     t_loss = train_loss/len(train_loader)
     acc = 100 * correct_predictions/total_samples
     scheduler.step()
-    return train_predictions, train_labels, t_loss, acc
+    return train_predictions, train_labels, t_loss, acc, missclassified_images, incorrect_labels, correct_labels
     
 
 
@@ -182,21 +183,17 @@ def evaluate(model, data_loader, criterion):
     return predictions, labels, avg_loss, accuracy, missclassified_images, incorrect_labels, correct_labels
 
 
-# output_directory = "./saved_images"
-# def guardar_data(missclassified_images, incorrect_labels, correct_labels, output_dir):
-#     if not os.path.exists(output_dir):
-#         os.makedirs(output_dir)
-#     for i in range(len(val_missclassified_images)):
-#         image = val_missclassified_images[i]
-#         incorrect_label = val_incorrect_labels[i]
-#         correct_label = val_correct_labels[i]
-#         image = (image * 255).astype(np.uint8)
-#         image = np.transpose(image, (1, 2, 0))
-#         image_pil = Image.fromarray(image)
-#         image_name = f"image_without_color_transformation_{i}_incorrect_{incorrect_label}_correct_{correct_label}.png"
-#         image_path = os.path.join(output_dir, image_name)
-#         image_pil = Image.fromarray((image * 255).astype(np.uint8))  # Convertir de valores normalizados a enteros de 0 a 255
-#         image_pil.save(image_path)
+def guardar_data(missclassified_images, incorrect_labels, correct_labels, output_dir):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    for i in range(len(missclassified_images)):
+    image = missclassified_images[i]
+    incorrect_label = incorrect_labels[i]
+    correct_label = correct_labels[i]
+    
+    image_name = f"image_{i}_incorrect_{incorrect_label}_correct_{correct_label}.png"
+    image_path = os.path.join(output_dir, image_name)
+    image_pil.save(image_path)
     
 train_loss=[]
 val_loss=[]
@@ -204,6 +201,10 @@ test_loss=[]
 num_epochs = 10
 best_val_loss = float('inf')
 best_model_state_dict = None
+
+
+output_train_directory = "./train_missclassified_images"
+
 for epoch in range(num_epochs):
     #impresión train
     train_predictions, train_labels, t_loss, acc = train(model, train_loader, criterion, optimizer)
