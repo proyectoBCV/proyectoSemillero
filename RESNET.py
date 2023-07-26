@@ -63,15 +63,12 @@ test_dataset = CustomDataset(test_data, transform=transform)
 valid_dataset = CustomDataset(valid_data, transform=transform)
 
 # ... Código para crear los data loaders ... AJUSTAR BATCH
-batch_full_train = 1772
-batch_accumulation_train = 180
-steps_per_epoch_train = batch_full_train // batch_accumulation_train
-
+batch_train= 443
 batch_test = 380
 batch_valid = 379
 
 
-train_loader = DataLoader(train_dataset, batch_size=batch_accumulation_train, shuffle=True, num_workers=4, pin_memory=True)
+train_loader = DataLoader(train_dataset, batch_size=batch_train, shuffle=True, num_workers=4, pin_memory=True)
 test_loader = DataLoader(test_dataset, batch_size=batch_test, shuffle=False, num_workers=4, pin_memory=True)
 valid_loader = DataLoader(valid_dataset, batch_size=batch_valid, shuffle=False, num_workers=4, pin_memory=True)
 
@@ -209,8 +206,8 @@ best_val_loss = float('inf')
 best_model_state_dict = None
 for epoch in range(num_epochs):
     #impresión train
-    train_predictions, train_labels, t_loss, acc = train(model, train_loader, criterion, optimizer,steps_per_epoch_train)
-    train_precision = precision_score(train_labels, train_predictions, average=None)
+    train_predictions, train_labels, t_loss, acc = train(model, train_loader, criterion, optimizer)
+    train_precision = precision_score(train_labels, train_predictions, average=None,zero_division=1)
     train_recall = recall_score(train_labels, train_predictions, average=None)
     train_f1_score = f1_score(train_labels, train_predictions, average=None)
     train_loss.append(t_loss)
@@ -225,7 +222,7 @@ for epoch in range(num_epochs):
     
     #Validación
     valid_predictions, valid_labels, v_loss, v_acc, val_missclassified_images, val_incorrect_labels, val_correct_labels = evaluate(model, valid_loader, criterion) #,valid_images, valid_label_true, valid_label_pred = evaluate(model, valid_loader, criterion)  
-    valid_precision = precision_score(valid_labels, valid_predictions, average=None)
+    valid_precision = precision_score(valid_labels, valid_predictions, average=None, zero_division=1)
     valid_recall = recall_score(valid_labels, valid_predictions, average=None)
     valid_f1_score = f1_score(valid_labels, valid_predictions, average=None)
     valid_accuracy= accuracy_score(valid_labels, valid_predictions, normalize=False)
@@ -247,7 +244,7 @@ for epoch in range(num_epochs):
     
     # Evaluación en el conjunto de prueba
     test_predictions, test_labels, t_loss, t_acc, train_missclassified_images, train_incorrect_labels, train_correct_labels = evaluate(model, test_loader, criterion) #, test_images, test_label_true, test_label_pred = evaluate(model, test_loader, criterion)
-    test_precision = precision_score(test_labels, test_predictions, average=None)
+    test_precision = precision_score(test_labels, test_predictions, average=None, zero_division=1)
     test_recall = recall_score(test_labels, test_predictions, average=None)
     test_f1_score = f1_score(test_labels, test_predictions, average=None)
     test_accuracy= accuracy_score(test_labels, test_predictions, normalize=False)
