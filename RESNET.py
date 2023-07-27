@@ -50,7 +50,7 @@ class CustomDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         image_id = self.data['image'].iloc[index]
-        image_path = f"/home/nmercado/data_proyecto{image_id}.jpg"
+        image_path = f"/media/user_home0/sgoyesp/Proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
         image = Image.open(image_path)
         label = self.data['final_label'].iloc[index]
         if self.transform:
@@ -115,7 +115,7 @@ def train(model, train_loader, criterion, optimizer):
     total_samples = 0
     train_predictions = []
     train_labels = []
-    missclassified_image_ids = []  # Corregido: debe ser missclassified_image_ids en lugar de missclassified_images_ids
+    missclassified_image_ids = []
 
     for images, labels, image_ids in train_loader:
         images, labels = images.to(device), labels.to(device)
@@ -133,12 +133,13 @@ def train(model, train_loader, criterion, optimizer):
         missclassified_indices = torch.where(predicted != labels)[0]
         incorrect_labels = predicted[missclassified_indices].cpu().numpy()
         correct_labels = labels[missclassified_indices].cpu().numpy()
-        missclassified_image_ids.extend(image_ids[missclassified_indices])  # Corregido: debe ser image_ids en lugar de image_id
+        missclassified_image_ids.extend([image_ids[idx] for idx in missclassified_indices])
         
     t_loss = train_loss / len(train_loader)
     acc = 100 * correct_predictions / total_samples
     scheduler.step()
     return train_predictions, train_labels, t_loss, acc, missclassified_image_ids, incorrect_labels, correct_labels
+
 #Guardar los pesos del entrenamiento
 #torch.save(model.state_dict(), 'modelo_entrenado3.pth')
 
@@ -180,10 +181,10 @@ def evaluate(model, data_loader, criterion):
 def guardar_data(ids_missclassified_images, incorrect_labels, correct_labels, output_dir):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    for i in range(len(missclassified_images)):
-        image_path = f"/home/nmercado/data_proyecto{ids_missclassified_images[i]}.jpg"
-        incorrect_label = incorrect_labels[i]
-        correct_label = correct_labels[i]
+    for i in range(len(ids_missclassified_images)):
+        image_path = f"/media/user_home0/sgoyesp/Proyecto/ISIC_2019_Training_Input/{ids_missclassified_images[i]}.jpg"
+        incorrect_label = incorrect_labels[i]  
+        correct_label = correct_labels[i]      
         image_pil = Image.open(image_path)
         image_name = f"image_{i}_incorrect_prediction{incorrect_label}_correct_{correct_label}.png"
         image_path = os.path.join(output_dir, image_name)
