@@ -50,7 +50,7 @@ class CustomDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         image_id = self.data['image'].iloc[index]
-        image_path = f"/media/user_home0/sgoyesp/Proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
+        image_path = f"/home/nmercado/data_proyecto/data_proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
         image = Image.open(image_path)
         label = self.data['final_label'].iloc[index]
         if self.transform:
@@ -131,6 +131,7 @@ def train(model, train_loader, criterion, optimizer):
         train_predictions.extend(predicted.cpu().numpy())
         train_labels.extend(labels.cpu().numpy())
         missclassified_indices = torch.where(predicted != labels)[0]
+        #breakpoint()
         incorrect_labels = predicted[missclassified_indices].cpu().numpy()
         correct_labels = labels[missclassified_indices].cpu().numpy()
         missclassified_image_ids.extend([image_ids[idx] for idx in missclassified_indices])
@@ -181,15 +182,14 @@ def evaluate(model, data_loader, criterion):
 def guardar_data(ids_missclassified_images, incorrect_labels, correct_labels, output_dir):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    for i in range(len(ids_missclassified_images)):
-        image_path = f"/media/user_home0/sgoyesp/Proyecto/ISIC_2019_Training_Input/{ids_missclassified_images[i]}.jpg"
-        incorrect_label = incorrect_labels[i]  
-        correct_label = correct_labels[i]      
+    for i, (image_id, incorrect_label, correct_label) in enumerate(zip(ids_missclassified_images, incorrect_labels, correct_labels)):
+        image_path = f"/home/nmercado/data_proyecto/data_proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
         image_pil = Image.open(image_path)
         image_name = f"image_{i}_incorrect_prediction{incorrect_label}_correct_{correct_label}.png"
         image_path = os.path.join(output_dir, image_name)
         image_pil.save(image_path)
     
+
 train_loss=[]
 val_loss=[]
 test_loss=[]
@@ -201,6 +201,7 @@ best_model_state_dict = None
 output_train_directory = "./train_missclassified_images"
 output_val_directory = "./val_missclassified_images"
 output_test_directory = "./test_missclassified_images"
+
 
 output_results_file = "results.txt"
 
