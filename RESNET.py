@@ -50,7 +50,7 @@ class CustomDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         image_id = self.data['image'].iloc[index]
-        image_path = f"/home/nmercado/data_proyecto/data_proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
+        image_path = f"/media/user_home0/sgoyesp/Proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
         image = Image.open(image_path)
         label = self.data['final_label'].iloc[index]
         if self.transform:
@@ -170,7 +170,7 @@ def evaluate(model, data_loader, criterion):
             missclassified_indices = torch.where(predicted != labels_batch)[0]
             incorrect_labels = predicted[missclassified_indices].cpu().numpy()
             correct_labels = labels_batch[missclassified_indices].cpu().numpy()
-            missclassified_image_ids.extend(image_ids[missclassified_indices])
+            missclassified_image_ids.extend([image_ids[idx] for idx in missclassified_indices.tolist()])
             
             
     avg_loss = loss / len(data_loader)
@@ -183,7 +183,7 @@ def guardar_data(ids_missclassified_images, incorrect_labels, correct_labels, ou
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     for i, (image_id, incorrect_label, correct_label) in enumerate(zip(ids_missclassified_images, incorrect_labels, correct_labels)):
-        image_path = f"/home/nmercado/data_proyecto/data_proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
+        image_path = f"/media/user_home0/sgoyesp/Proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
         image_pil = Image.open(image_path)
         image_name = f"image_{i}_incorrect_prediction{incorrect_label}_correct_{correct_label}.png"
         image_path = os.path.join(output_dir, image_name)
@@ -213,8 +213,8 @@ with open(output_results_file, 'w') as f:
         train_recall = recall_score(train_labels, train_predictions, average=None)
         train_f1_score = f1_score(train_labels, train_predictions, average=None)
         train_loss.append(t_loss)
-
-        guardar_data(train_missclassified_images, train_incorrect_labels, train_correct_labels, output_train_directory)
+        if epoch==9:
+            guardar_data(train_missclassified_images, train_incorrect_labels, train_correct_labels, output_train_directory)
 
         print(f'Época: {epoch+1:.4f}', file=f)
         print(f'Training Loss: {t_loss:.4f} | Training Accuracy: {acc:.2f}%', file=f)
@@ -230,8 +230,8 @@ with open(output_results_file, 'w') as f:
         valid_f1_score = f1_score(valid_labels, valid_predictions, average=None)
         valid_accuracy= accuracy_score(valid_labels, valid_predictions, normalize=True)
         val_loss.append(v_loss)
-
-        guardar_data(val_missclassified_images, val_incorrect_labels, output_val_directory)
+        if epoch==9:
+            guardar_data(val_missclassified_images, val_incorrect_labels, val_correct_labels, output_val_directory)
     
         if v_loss < best_val_loss:
             best_val_loss = v_loss
@@ -254,8 +254,8 @@ with open(output_results_file, 'w') as f:
         test_f1_score = f1_score(test_labels, test_predictions, average=None)
         test_accuracy= accuracy_score(test_labels, test_predictions, normalize=True)
         test_loss.append(t_loss)
-
-        guardar_data(test_missclassified_images, test_incorrect_labels, test_correct_labels, output_test_directory)
+        if epoch==9:
+            guardar_data(test_missclassified_images, test_incorrect_labels, test_correct_labels, output_test_directory)
     
         print('---------- Prueba ----------', file=f)
         print(f'Test Loss: {t_loss:.4f} | Test Accuracy: {t_acc:.2f}%', file=f)
