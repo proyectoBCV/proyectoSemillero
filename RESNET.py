@@ -30,12 +30,14 @@ random_transforms = [
     transforms.RandomHorizontalFlip(),  # Volteo horizontal
     transforms.RandomVerticalFlip(),    # Volteo vertical
     transforms.RandomRotation(30),      # Rotación aleatoria de hasta 30 grados
-    #transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1)  # Ajustes aleatorios de color
+    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1)  # Ajustes aleatorios de color
+    transforms.RandomPerspective(), 
 ]
 
 transform = transforms.Compose([
     transforms.Resize((224, 224)),  # Redimensionar las imágenes a 224x224 (tamaño requerido por ResNet)
     transforms.ToTensor(),
+    transforms.RandomApply(random_transforms, p=0.5),
     transforms.Normalize((0.5558, 0.5982, 0.6149), (0.2433, 0.1914, 0.1902))  # Normalización de los valores de los píxeles
 ])
 
@@ -50,7 +52,7 @@ class CustomDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         image_id = self.data['image'].iloc[index]
-        image_path = f"/media/user_home0/sgoyesp/Proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
+        image_path = f"/home/nmercado/data_proyecto/data_proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
         image = Image.open(image_path)
         label = self.data['final_label'].iloc[index]
         if self.transform:
@@ -77,6 +79,11 @@ model = models.resnet18(pretrained=True)
 num_ftrs = model.fc.in_features
 # Reemplazar la capa completamente conectada para ajustarse al número de clases a 8
 model.fc = nn.Linear(num_ftrs, 8)
+
+PATH_TO_BEST_MODEL_WEIGHTS = "/home/nmercado/mejor_modelo.pth"
+pretrained_state_dict = torch.load(PATH_TO_BEST_MODEL_WEIGHTS, map_location=device)
+model.load_state_dict(pretrained_state_dict, strict=False)
+
 
 #Carga de pesos preentrenados en un experimento anterior
 #pretrained_state_dict = torch.load("modelo_entrenado2.pth", map_location=device)
@@ -183,7 +190,7 @@ def guardar_data(ids_missclassified_images, incorrect_labels, correct_labels, ou
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     for i, (image_id, incorrect_label, correct_label) in enumerate(zip(ids_missclassified_images, incorrect_labels, correct_labels)):
-        image_path = f"/media/user_home0/sgoyesp/Proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
+        image_path = f"/home/nmercado/data_proyecto/data_proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
         image_pil = Image.open(image_path)
         image_name = f"image_{i}_incorrect_prediction{incorrect_label}_correct_{correct_label}.png"
         image_path = os.path.join(output_dir, image_name)
@@ -203,7 +210,7 @@ output_val_directory = "./val_missclassified_images"
 output_test_directory = "./test_missclassified_images"
 
 
-output_results_file = "results.txt"
+output_results_file = "results_pretrainedWeights_randomTransforms.txt"
 
 with open(output_results_file, 'w') as f:
     for epoch in range(num_epochs):
