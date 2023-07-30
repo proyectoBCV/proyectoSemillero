@@ -30,8 +30,8 @@ random_transforms = [
     transforms.RandomHorizontalFlip(),  # Volteo horizontal
     transforms.RandomVerticalFlip(),    # Volteo vertical
     transforms.RandomRotation(30),      # Rotación aleatoria de hasta 30 grados
-    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1)  # Ajustes aleatorios de color
-    transforms.RandomPerspective(), 
+    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),  # Ajustes aleatorios de color
+    transforms.RandomPerspective() 
 ]
 
 transform = transforms.Compose([
@@ -52,7 +52,7 @@ class CustomDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         image_id = self.data['image'].iloc[index]
-        image_path = f"/home/nmercado/data_proyecto/data_proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
+        image_path = f"/media/user_home0/sgoyesp/Proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
         image = Image.open(image_path)
         label = self.data['final_label'].iloc[index]
         if self.transform:
@@ -80,7 +80,7 @@ num_ftrs = model.fc.in_features
 # Reemplazar la capa completamente conectada para ajustarse al número de clases a 8
 model.fc = nn.Linear(num_ftrs, 8)
 
-PATH_TO_BEST_MODEL_WEIGHTS = "/home/nmercado/mejor_modelo.pth"
+PATH_TO_BEST_MODEL_WEIGHTS = "/media/user_home0/sgoyesp/proyectoSemillero/mejor_modelo.pth"
 pretrained_state_dict = torch.load(PATH_TO_BEST_MODEL_WEIGHTS, map_location=device)
 model.load_state_dict(pretrained_state_dict, strict=False)
 
@@ -190,7 +190,7 @@ def guardar_data(ids_missclassified_images, incorrect_labels, correct_labels, ou
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     for i, (image_id, incorrect_label, correct_label) in enumerate(zip(ids_missclassified_images, incorrect_labels, correct_labels)):
-        image_path = f"/home/nmercado/data_proyecto/data_proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
+        image_path = f"/media/user_home0/sgoyesp/Proyecto/ISIC_2019_Training_Input/{image_id}.jpg"
         image_pil = Image.open(image_path)
         image_name = f"image_{i}_incorrect_prediction{incorrect_label}_correct_{correct_label}.png"
         image_path = os.path.join(output_dir, image_name)
@@ -284,7 +284,7 @@ plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.title('Loss')
 plt.legend()
-plt.savefig("losses.png")
+plt.savefig("losses_pesos_preentrenados.png")
 plt.close()
 
 end_time = time.time()
