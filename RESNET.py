@@ -79,7 +79,7 @@ model = models.resnet18(pretrained=True)
 num_ftrs = model.fc.in_features
 # Reemplazar la capa completamente conectada para ajustarse al número de clases a 8
 model.fc = nn.Linear(num_ftrs, 8)
-
+"""
 PATH_TO_BEST_MODEL_WEIGHTS = "/media/user_home0/sgoyesp/proyectoSemillero/mejor_modelo.pth"
 pretrained_state_dict = torch.load(PATH_TO_BEST_MODEL_WEIGHTS, map_location=device)
 model.load_state_dict(pretrained_state_dict, strict=False)
@@ -89,12 +89,19 @@ model.load_state_dict(pretrained_state_dict, strict=False)
 #pretrained_state_dict = torch.load("modelo_entrenado2.pth", map_location=device)
 
 # Sacar los pesos de la última capa 
-"""
+
 model_state_dict = model.state_dict()
 filtered_state_dict = {k: v.to(device) for k, v in pretrained_state_dict.items() if k in model_state_dict}
 model_state_dict.update(filtered_state_dict)
 model.load_state_dict(model_state_dict)
 """
+
+for param in model.parameters():
+    param.requires_grad = False
+
+# Descongelar los parámetros de la última capa para que sean entrenables
+model.fc.weight.requires_grad = True
+model.fc.bias.requires_grad = True
 
 #Mover el modelo a la GPU
 model = model.to(device)
