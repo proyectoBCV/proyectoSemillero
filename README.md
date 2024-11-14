@@ -33,12 +33,12 @@ Images are resized and normalized. Data augmentation techniques, such as rotatio
 - Training and Optimization: Models are trained on the processed dataset with early stopping and hyperparameter tuning to minimize overfitting.
 - Evaluation: Each model's performance is evaluated on the validation and test sets using metrics like accuracy, F1 score, and AUC (Area Under the Curve).
 
-Installation
-Clone the repository:
+# Installation
+- Clone the repository:
 git clone https://github.com/your-username/DermAI.git
 cd DermAI
 
-Install dependencies:
+- Install dependencies:
 pip install -r requirements.txt
 Download ISIC 2019 dataset: The dataset can be downloaded from the ISIC Archive and should be organized in the following structure:
 
@@ -49,13 +49,13 @@ DermAI/
 │   ├── valid/
 │   └── test/
 
-Usage
+# Usage
 To train and evaluate models, you can use the provided scripts:
 
-Train a model:
+- Train a model:
 python train_model.py --model <model_name> --epochs <num_epochs>
 
-Evaluate a model:
+- Evaluate a model:
 python evaluate_model.py --model <model_name> --checkpoint <path_to_checkpoint>
 Replace <model_name> with AlexNet, ResNet, or ViT as required.
 
